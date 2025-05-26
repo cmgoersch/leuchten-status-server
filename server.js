@@ -1,15 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import ping from 'ping';
+import 'dotenv/config';
 
 const app = express();
-const port = 3000;
 
 app.use(cors());
 
-const hostname = 'wled-WLED-leuchten.intern.gaengeviertel.de';
-//Shelly der Stromzähler
-// const hostname = '192.168.193.192';
+const hostname = process.env.HOSTNAME || 'localhost';
+const port = process.env.PORT || 3000;
+
 
 let currentStatus = 'unreachable';
 
