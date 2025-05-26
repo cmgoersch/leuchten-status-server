@@ -43,6 +43,8 @@ async function checkReachability() {
     }
 }
 
+// Testerfunction:
+
 // async function checkReachability() {
 //     try {
 //         // Simuliere erfolgreiche Verbindung
