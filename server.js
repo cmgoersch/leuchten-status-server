@@ -31,7 +31,7 @@ async function checkReachability() {
     }
 }
 
-// Status regelmäßig prüfen
+// Status alle 60 Sekunden prüfen
 setInterval(checkReachability, 60000);
 checkReachability();
 
