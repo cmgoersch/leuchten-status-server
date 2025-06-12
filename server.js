@@ -7,7 +7,7 @@ const app = express();
 
 app.use(cors());
 
-const hostname = process.env.HOSTNAME || 'localhost';
+const hostname = process.env.PING_TARGET || 'localhost';
 // const hostname = '127.0.0.1'; 
 const port = process.env.PORT || 3000;
 
