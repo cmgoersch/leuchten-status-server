@@ -3,89 +3,73 @@ import cors from 'cors';
 import ping from 'ping';
 import 'dotenv/config';
 
-const app = express();
-
-app.use(cors());
-
 const hostname = process.env.PING_TARGET || 'localhost';
-// const hostname = '127.0.0.1'; 
-const port = process.env.PORT || 3000;
-
+const port = Number(process.env.PORT) || 3000;
+const checkIntervalMs = (Number(process.env.CHECK_INTERVAL_SECONDS) || 60) * 1000;
+// Zum lokalen Testen ohne erreichbares Gerät: SIMULATE_ONLINE=true
+const simulateOnline = process.env.SIMULATE_ONLINE === 'true';
 
 let currentStatus = 'unreachable';
 let lastOnlineTimestamp = null;
 
+async function isAlive() {
+    if (simulateOnline) return true;
+
+    const res = await ping.promise.probe(hostname, {
+        timeout: 10,
+        min_reply: 1
+    });
+    return res.alive;
+}
+
+function setStatus(status) {
+    if (status === 'on' && currentStatus !== 'on') {
+        lastOnlineTimestamp = Date.now();
+    } else if (status !== 'on') {
+        lastOnlineTimestamp = null;
+    }
+
+    if (status !== currentStatus) {
+        console.log(`Ping-Status zu ${hostname}: ${currentStatus} -> ${status}`);
+    }
+    currentStatus = status;
+}
+
 async function checkReachability() {
     try {
-        const res = await ping.promise.probe(hostname, {
-            timeout: 10,
-            extra: ['-c', '1'],
-            min_reply: 1
-        });
-
-        console.log('Ping-Antwort:', res);
-
-        if (res.alive) {
-            if (currentStatus !== 'on') {
-                lastOnlineTimestamp = Date.now();
-            }
-            currentStatus = 'on';
-        } else {
-            currentStatus = 'off';
-            lastOnlineTimestamp = null;
-        }
-
-        console.log(`Ping-Status zu ${hostname}: ${currentStatus}`);
+        setStatus((await isAlive()) ? 'on' : 'off');
     } catch (error) {
         console.error('Fehler beim Pingen:', error);
-        currentStatus = 'unreachable';
-        lastOnlineTimestamp = null;
+        setStatus('unreachable');
     }
 }
 
-// Testerfunction:
+const app = express();
+app.use(cors());
 
-// async function checkReachability() {
-//     try {
-//         // Simuliere erfolgreiche Verbindung
-//         const simulatedAlive = true;
+app.get('/api/wled-status', (_req, res) => {
+    const uptimeSeconds = currentStatus === 'on' && lastOnlineTimestamp
+        ? Math.floor((Date.now() - lastOnlineTimestamp) / 1000)
+        : null;
 
-//         if (simulatedAlive) {
-//             if (currentStatus !== 'on') {
-//                 lastOnlineTimestamp = Date.now();
-//             }
-//             currentStatus = 'on';
-//         } else {
-//             currentStatus = 'off';
-//             lastOnlineTimestamp = null;
-//         }
+    res.json({
+        state: currentStatus,
+        uptimeSeconds
+    });
+});
 
-//         console.log(`(Simuliert) Ping-Status zu ${hostname}: ${currentStatus}`);
-//     } catch (error) {
-//         console.error('Fehler beim Pingen:', error);
-//         currentStatus = 'unreachable';
-//         lastOnlineTimestamp = null;
-//     }
-// }
-
-
-// Status alle 60 Sekunden prüfen
-setInterval(checkReachability, 60000);
 checkReachability();
+const interval = setInterval(checkReachability, checkIntervalMs);
 
-app.get('/api/wled-status', (req, res) => {
-  let uptimeSeconds = null;
-
-  if (currentStatus === 'on' && lastOnlineTimestamp) {
-    uptimeSeconds = Math.floor((Date.now() - lastOnlineTimestamp) / 1000);
-  }
-
-  res.json({
-    state: currentStatus,
-    uptimeSeconds
-  });
+const server = app.listen(port, () => {
+    console.log(`Server läuft auf http://localhost:${port} (Ziel: ${hostname}, Intervall: ${checkIntervalMs / 1000}s)`);
 });
 
-app.listen(port, () => {
-    console.log(`Server läuft auf http://localhost:${port}`);
-});
+// Sauber beenden, z.B. bei `docker stop`
+function shutdown(signal) {
+    console.log(`${signal} empfangen, Server wird beendet`);
+    clearInterval(interval);
+    server.close(() => process.exit(0));
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

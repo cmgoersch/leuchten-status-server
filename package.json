@@ -1,20 +1,23 @@
 {
   "name": "leuchten-status-server",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "npx nodemon server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Pingt einen Host und stellt den Erreichbarkeitsstatus per HTTP bereit",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "node-fetch": "^3.3.2",
     "ping": "^0.4.4"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
