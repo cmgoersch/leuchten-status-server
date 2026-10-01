@@ -11,6 +11,8 @@ Pingt regelmäßig einen Host (z.B. ein WLED-Gerät) und stellt den Status als J
 | `PING_TARGET`            | `localhost` | Host/IP, der angepingt wird                   |
 | `PORT`                   | `3000`      | HTTP-Port                                     |
 | `CHECK_INTERVAL_SECONDS` | `60`        | Abstand zwischen zwei Pings                   |
+| `RETRY_COUNT`            | `3`         | Wiederholungen, bevor ein Ausfall zählt       |
+| `RETRY_DELAY_SECONDS`    | `10`        | Abstand zwischen den Wiederholungen           |
 | `SIMULATE_ONLINE`        | –           | `true` meldet immer `on` (zum lokalen Testen) |
 
 ## Starten

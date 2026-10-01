@@ -6,6 +6,8 @@ import 'dotenv/config';
 const hostname = process.env.PING_TARGET || 'localhost';
 const port = Number(process.env.PORT) || 3000;
 const checkIntervalMs = (Number(process.env.CHECK_INTERVAL_SECONDS) || 60) * 1000;
+const retryCount = Number(process.env.RETRY_COUNT ?? 3);
+const retryDelayMs = (Number(process.env.RETRY_DELAY_SECONDS) || 10) * 1000;
 // Zum lokalen Testen ohne erreichbares Gerät: SIMULATE_ONLINE=true
 const simulateOnline = process.env.SIMULATE_ONLINE === 'true';
 
@@ -35,13 +37,31 @@ function setStatus(status) {
     currentStatus = status;
 }
 
-async function checkReachability() {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function probe() {
     try {
-        setStatus((await isAlive()) ? 'on' : 'off');
+        return (await isAlive()) ? 'on' : 'off';
     } catch (error) {
         console.error('Fehler beim Pingen:', error);
-        setStatus('unreachable');
+        return 'unreachable';
     }
+}
+
+async function checkReachability() {
+    let status = await probe();
+
+    // War das Gerät online, nicht sofort aufgeben: erst ein paar Wiederholungen,
+    // damit ein einzelner verlorener Ping den Uptime-Zähler nicht zurücksetzt.
+    if (status !== 'on' && currentStatus === 'on') {
+        for (let attempt = 1; attempt <= retryCount && status !== 'on'; attempt++) {
+            console.log(`Ping zu ${hostname} fehlgeschlagen, Wiederholung ${attempt}/${retryCount} in ${retryDelayMs / 1000}s`);
+            await sleep(retryDelayMs);
+            status = await probe();
+        }
+    }
+
+    setStatus(status);
 }
 
 const app = express();
@@ -58,8 +78,13 @@ app.get('/api/wled-status', (_req, res) => {
     });
 });
 
-checkReachability();
-const interval = setInterval(checkReachability, checkIntervalMs);
+// setTimeout statt setInterval, damit sich Prüfungen mit Wiederholungen nicht überlappen
+let nextCheck;
+async function scheduleChecks() {
+    await checkReachability();
+    nextCheck = setTimeout(scheduleChecks, checkIntervalMs);
+}
+scheduleChecks();
 
 const server = app.listen(port, () => {
     console.log(`Server läuft auf http://localhost:${port} (Ziel: ${hostname}, Intervall: ${checkIntervalMs / 1000}s)`);
@@ -68,7 +93,7 @@ const server = app.listen(port, () => {
 // Sauber beenden, z.B. bei `docker stop`
 function shutdown(signal) {
     console.log(`${signal} empfangen, Server wird beendet`);
-    clearInterval(interval);
+    clearTimeout(nextCheck);
     server.close(() => process.exit(0));
 }
 process.on('SIGTERM', shutdown);
